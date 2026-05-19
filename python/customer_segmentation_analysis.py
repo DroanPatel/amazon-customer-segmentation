@@ -2,29 +2,31 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Load Dataset
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+
+# LOAD DATASET
 df = pd.read_csv(
     "OnlineRetail.csv",
     encoding='ISO-8859-1',
     low_memory=False
 )
 
-# Display first 5 rows
+# DISPLAY BASIC INFORMATION
 print("\nFirst 5 Rows:")
 print(df.head())
 
-# Dataset Information
 print("\nDataset Info:")
 print(df.info())
 
-# Missing Values
 print("\nMissing Values:")
 print(df.isnull().sum())
 
+# DATA CLEANING
 # Remove missing Customer IDs
 df = df.dropna(subset=['CustomerID'])
 
-# Remove rows with missing descriptions
+# Remove missing Descriptions
 df = df.dropna(subset=['Description'])
 
 # Convert InvoiceDate to datetime
@@ -34,23 +36,23 @@ df['InvoiceDate'] = pd.to_datetime(
     dayfirst=True
 )
 
-# Create Revenue Column
-df['Revenue'] = df['Quantity'] * df['UnitPrice']
-
-# Remove negative quantities and prices
+# Remove negative Quantity and UnitPrice values
 df = df[(df['Quantity'] > 0) & (df['UnitPrice'] > 0)]
 
-# Basic KPIs
+# Create Revenue column
+df['Revenue'] = df['Quantity'] * df['UnitPrice']
+
+# BASIC KPIs
 total_revenue = round(df['Revenue'].sum(), 2)
 total_customers = df['CustomerID'].nunique()
 total_orders = df['InvoiceNo'].nunique()
 
-print("\nBasic KPIs")
+print("\n===== BASIC KPIs =====")
 print("Total Revenue:", total_revenue)
 print("Total Customers:", total_customers)
 print("Total Orders:", total_orders)
 
-# Top 10 Countries by Revenue
+# TOP 10 COUNTRIES BY REVENUE
 top_countries = (
     df.groupby('Country')['Revenue']
     .sum()
@@ -59,6 +61,7 @@ top_countries = (
 )
 
 plt.figure(figsize=(10,5))
+
 top_countries.plot(kind='bar')
 
 plt.title("Top 10 Countries by Revenue")
@@ -69,7 +72,7 @@ plt.savefig("top_countries_revenue.png")
 
 plt.show()
 
-# Monthly Revenue Trend
+# MONTHLY REVENUE TREND
 df['Month'] = df['InvoiceDate'].dt.month
 
 monthly_sales = (
@@ -78,6 +81,7 @@ monthly_sales = (
 )
 
 plt.figure(figsize=(10,5))
+
 monthly_sales.plot(marker='o')
 
 plt.title("Monthly Revenue Trend")
@@ -88,7 +92,7 @@ plt.savefig("monthly_revenue_trend.png")
 
 plt.show()
 
-# Top 10 Customers by Revenue
+# TOP 10 CUSTOMERS BY REVENUE
 top_customers = (
     df.groupby('CustomerID')['Revenue']
     .sum()
@@ -96,25 +100,10 @@ top_customers = (
     .head(10)
 )
 
-print("\nTop 10 Customers by Revenue")
+print("\n===== TOP 10 CUSTOMERS BY REVENUE =====")
 print(top_customers)
 
-# RFM Analysis
-snapshot_date = df['InvoiceDate'].max() + pd.Timedelta(days=1)
-
-rfm = df.groupby('CustomerID').agg({
-    'InvoiceDate': lambda x: (snapshot_date - x.max()).days,
-    'InvoiceNo': 'nunique',
-    'Revenue': 'sum'
-})
-
-# Rename Columns
-rfm.columns = ['Recency', 'Frequency', 'Monetary']
-
-print("\nRFM Analysis")
-print(rfm.head())
-
-# Top 10 Products by Revenue
+# TOP 10 PRODUCTS BY REVENUE
 top_products = (
     df.groupby('Description')['Revenue']
     .sum()
@@ -123,6 +112,7 @@ top_products = (
 )
 
 plt.figure(figsize=(12,5))
+
 top_products.plot(kind='bar')
 
 plt.title("Top 10 Products by Revenue")
@@ -133,7 +123,7 @@ plt.savefig("top_products_revenue.png")
 
 plt.show()
 
-# Revenue Distribution
+# REVENUE DISTRIBUTION
 plt.figure(figsize=(8,5))
 
 plt.hist(df['Revenue'], bins=50)
@@ -146,4 +136,60 @@ plt.savefig("revenue_distribution.png")
 
 plt.show()
 
-print("\nAnalysis Completed Successfully")
+# RFM ANALYSIS
+snapshot_date = df['InvoiceDate'].max() + pd.Timedelta(days=1)
+
+rfm = df.groupby('CustomerID').agg({
+    'InvoiceDate': lambda x: (snapshot_date - x.max()).days,
+    'InvoiceNo': 'nunique',
+    'Revenue': 'sum'
+})
+
+# Rename columns
+rfm.columns = ['Recency', 'Frequency', 'Monetary']
+
+print("\n===== RFM ANALYSIS =====")
+print(rfm.head())
+
+# K-MEANS CLUSTERING
+# Select RFM Features
+rfm_data = rfm[['Recency', 'Frequency', 'Monetary']]
+
+# Scale Data
+scaler = StandardScaler()
+
+rfm_scaled = scaler.fit_transform(rfm_data)
+
+# Apply K-Means
+kmeans = KMeans(
+    n_clusters=4,
+    random_state=42
+)
+
+rfm['Cluster'] = kmeans.fit_predict(rfm_scaled)
+
+# CLUSTER RESULTS
+print("\n===== CUSTOMER SEGMENTS =====")
+print(rfm['Cluster'].value_counts())
+
+cluster_summary = rfm.groupby('Cluster').mean()
+
+print("\n===== CLUSTER SUMMARY =====")
+print(cluster_summary)
+
+# CUSTOMER SEGMENTATION VISUALIZATION
+plt.figure(figsize=(8,5))
+
+scatter = plt.scatter(
+    rfm['Frequency'],
+    rfm['Monetary'],
+    c=rfm['Cluster']
+)
+
+plt.title("Customer Segmentation using K-Means")
+plt.xlabel("Frequency")
+plt.ylabel("Monetary")
+
+plt.savefig("customer_segmentation_clusters.png")
+
+plt.show()
